@@ -119,11 +119,6 @@ if (CMAKE_SYSTEM_NAME STREQUAL Linux)
   set(DAWN_USE_WAYLAND ON CACHE BOOL "Enable support for Wayland surface" FORCE)
 endif ()
 if (MINGW)
-    # Dawn's D3D sources may reference HRESULT before including the full Win32
-    # type stack under MinGW. Force-include windows.h so HRESULT and related
-    # definitions are guaranteed present for Dawn D3D translation units.
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include windows.h")
-
     # Dawn's MinGW path should not rely on RenderDoc, which can force unsupported
     # headers/tooling combinations in GCC-based Windows environments.
     set(DAWN_ENABLE_RENDERDOC OFF CACHE BOOL "Disable RenderDoc for MinGW builds" FORCE)
@@ -140,6 +135,13 @@ set(AURORA_ENABLE_CARD ON CACHE BOOL "Enable CARD API support" FORCE)
 set(AURORA_ENABLE_RMLUI ON CACHE BOOL "Enable RmlUi UI support" FORCE)
 add_subdirectory(extern/aurora EXCLUDE_FROM_ALL)
 target_compile_definitions(aurora_mtx PRIVATE MTX_USE_PS=1)
+if (MINGW)
+    # Avoid polluting all C++ units (Tint breaks due Windows macro collisions),
+    # and scope forced Win32 type includes to Dawn native D3D compilations only.
+    if (TARGET dawn_native_objects)
+        target_compile_options(dawn_native_objects PRIVATE -include windows.h)
+    endif ()
+endif ()
 
 add_subdirectory(libs/freeverb)
 
