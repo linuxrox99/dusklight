@@ -141,6 +141,30 @@ if (MINGW)
     if (TARGET dawn_native_objects)
         target_compile_options(dawn_native_objects PRIVATE -include windows.h -UDAWN_ENABLE_RENDERDOC -DDAWN_ENABLE_RENDERDOC=0)
     endif ()
+
+    # Patch Dawn source on MinGW for Win32 SDK surface differences:
+    # - IDXGraphicsAnalysis may be unavailable
+    # - CompareObjectHandles may be unavailable
+    set(_dawn_src_dir "${CMAKE_BINARY_DIR}/_deps/dawn-src/src/dawn/native/d3d12")
+    set(_dawn_backend_d3d12 "${_dawn_src_dir}/BackendD3D12.cpp")
+    set(_dawn_shared_fence_d3d12 "${_dawn_src_dir}/SharedFenceD3D12.cpp")
+    if (EXISTS "${_dawn_backend_d3d12}")
+        file(READ "${_dawn_backend_d3d12}" _dawn_backend_src)
+        string(REPLACE "ComPtr<IDXGraphicsAnalysis> graphicsAnalysis;"
+                       "#if defined(__MINGW32__)\n        // MinGW headers may not provide IDXGraphicsAnalysis.\n#else\n        ComPtr<IDXGraphicsAnalysis> graphicsAnalysis;"
+                       _dawn_backend_src "${_dawn_backend_src}")
+        string(REPLACE "graphicsAnalysis->BeginCapture();"
+                       "            graphicsAnalysis->BeginCapture();\n#endif"
+                       _dawn_backend_src "${_dawn_backend_src}")
+        file(WRITE "${_dawn_backend_d3d12}" "${_dawn_backend_src}")
+    endif ()
+    if (EXISTS "${_dawn_shared_fence_d3d12}")
+        file(READ "${_dawn_shared_fence_d3d12}" _dawn_shared_fence_src)
+        string(REPLACE "::CompareObjectHandles(queueFence->GetSystemHandle().Get(), descriptor->handle)"
+                       "(queueFence->GetSystemHandle().Get() == descriptor->handle)"
+                       _dawn_shared_fence_src "${_dawn_shared_fence_src}")
+        file(WRITE "${_dawn_shared_fence_d3d12}" "${_dawn_shared_fence_src}")
+    endif ()
 endif ()
 
 add_subdirectory(libs/freeverb)
