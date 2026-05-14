@@ -41,7 +41,12 @@ if (GIT_FOUND)
     # defines DUSK_WC_DESCRIBE
     execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} COMMAND ${GIT_EXECUTABLE} describe --tags --long --dirty --match "v*"
             OUTPUT_VARIABLE DUSK_WC_DESCRIBE
-            OUTPUT_STRIP_TRAILING_WHITESPACE)
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE DUSK_GIT_DESCRIBE_RESULT
+            ERROR_QUIET)
+    if (NOT DUSK_GIT_DESCRIBE_RESULT EQUAL 0)
+        set(DUSK_WC_DESCRIBE "")
+    endif ()
 
     # remove the git hash, then collapse a clean "-0" suffix only
     string(REGEX REPLACE "-[^-]+(-dirty|)$" "\\1" DUSK_WC_DESCRIBE "${DUSK_WC_DESCRIBE}")
@@ -112,6 +117,18 @@ set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "_cmake")
 
 if (CMAKE_SYSTEM_NAME STREQUAL Linux)
   set(DAWN_USE_WAYLAND ON CACHE BOOL "Enable support for Wayland surface" FORCE)
+endif ()
+if (MINGW)
+    # Dawn's MinGW path should not rely on RenderDoc, which can force unsupported
+    # headers/tooling combinations in GCC-based Windows environments.
+    set(DAWN_ENABLE_RENDERDOC OFF CACHE BOOL "Disable RenderDoc for MinGW builds" FORCE)
+    set(DAWN_USE_RENDERDOC OFF CACHE BOOL "Disable RenderDoc usage for MinGW builds" FORCE)
+    set(DAWN_SUPPORTS_RENDERDOC OFF CACHE BOOL "Disable RenderDoc support for MinGW builds" FORCE)
+
+    # If D3D is enabled, Dawn's D3D shader pipeline requires Tint's HLSL writer.
+    if (DAWN_ENABLE_D3D11 OR DAWN_ENABLE_D3D12)
+        set(TINT_BUILD_HLSL_WRITER ON CACHE BOOL "Required for Dawn D3D backends" FORCE)
+    endif ()
 endif ()
 set(AURORA_ENABLE_DVD ON CACHE BOOL "Enable DVD API support" FORCE)
 set(AURORA_ENABLE_CARD ON CACHE BOOL "Enable CARD API support" FORCE)
