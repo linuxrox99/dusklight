@@ -139,7 +139,7 @@ if (MINGW)
     # Avoid polluting all C++ units (Tint breaks due Windows macro collisions),
     # and scope forced Win32 type includes to Dawn native D3D compilations only.
     if (TARGET dawn_native_objects)
-        target_compile_options(dawn_native_objects PRIVATE -include windows.h)
+        target_compile_options(dawn_native_objects PRIVATE -include windows.h -UDAWN_ENABLE_RENDERDOC -DDAWN_ENABLE_RENDERDOC=0)
     endif ()
 endif ()
 
