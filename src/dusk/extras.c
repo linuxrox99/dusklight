@@ -24,7 +24,7 @@ int __cntlzw(unsigned int val) {
 #endif
 }
 
-#ifndef _MSC_VER
+#ifndef _WIN32
 int stricmp(const char* str1, const char* str2) {
 	char a_var;
 	char b_var;
@@ -70,7 +70,7 @@ int strnicmp(const char* str1, const char* str2, int n) {
 #endif
 
 void DCZeroRange(void* addr, uint32_t nBytes) {
-#if defined(_MSC_VER) || TARGET_ANDROID
+#if defined(_WIN32) || TARGET_ANDROID
     memset(addr, 0, nBytes);
 #else
     bzero(addr, nBytes);

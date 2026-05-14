@@ -227,4 +227,9 @@ int main(int argc, char* argv[]) {
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     return RunWindowsGuiEntryPoint();
 }
+#ifndef _MSC_VER
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    return RunWindowsGuiEntryPoint();
+}
+#endif
 #endif
