@@ -119,6 +119,11 @@ if (CMAKE_SYSTEM_NAME STREQUAL Linux)
   set(DAWN_USE_WAYLAND ON CACHE BOOL "Enable support for Wayland surface" FORCE)
 endif ()
 if (MINGW)
+    # Dawn's D3D sources may reference HRESULT in headers that do not reliably
+    # include Win32 error type definitions under MinGW. Force-include winerror.h
+    # so HRESULT / MAKE_HRESULT / E_OUTOFMEMORY are always visible.
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include winerror.h")
+
     # Dawn's MinGW path should not rely on RenderDoc, which can force unsupported
     # headers/tooling combinations in GCC-based Windows environments.
     set(DAWN_ENABLE_RENDERDOC OFF CACHE BOOL "Disable RenderDoc for MinGW builds" FORCE)
