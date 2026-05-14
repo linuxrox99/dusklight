@@ -41,7 +41,12 @@ if (GIT_FOUND)
     # defines DUSK_WC_DESCRIBE
     execute_process(WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} COMMAND ${GIT_EXECUTABLE} describe --tags --long --dirty --match "v*"
             OUTPUT_VARIABLE DUSK_WC_DESCRIBE
-            OUTPUT_STRIP_TRAILING_WHITESPACE)
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE DUSK_GIT_DESCRIBE_RESULT
+            ERROR_QUIET)
+    if (NOT DUSK_GIT_DESCRIBE_RESULT EQUAL 0)
+        set(DUSK_WC_DESCRIBE "")
+    endif ()
 
     # remove the git hash, then collapse a clean "-0" suffix only
     string(REGEX REPLACE "-[^-]+(-dirty|)$" "\\1" DUSK_WC_DESCRIBE "${DUSK_WC_DESCRIBE}")
@@ -113,11 +118,27 @@ set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "_cmake")
 if (CMAKE_SYSTEM_NAME STREQUAL Linux)
   set(DAWN_USE_WAYLAND ON CACHE BOOL "Enable support for Wayland surface" FORCE)
 endif ()
+if (MINGW)
+    # Dawn's MinGW path should not rely on RenderDoc, which can force unsupported
+    # headers/tooling combinations in GCC-based Windows environments.
+    set(DAWN_ENABLE_RENDERDOC OFF CACHE BOOL "Disable RenderDoc for MinGW builds" FORCE)
+    set(DAWN_USE_RENDERDOC OFF CACHE BOOL "Disable RenderDoc usage for MinGW builds" FORCE)
+    set(DAWN_SUPPORTS_RENDERDOC OFF CACHE BOOL "Disable RenderDoc support for MinGW builds" FORCE)
+
+    # Dawn D3D backends are currently not compatible with MinGW in this project
+    # due Windows SDK/header API gaps (e.g. IDXGraphicsAnalysis/CompareObjectHandles).
+    # Force-disable D3D backends on MinGW to keep a reliable full build path.
+    set(DAWN_ENABLE_D3D11 OFF CACHE BOOL "Disable Dawn D3D11 backend on MinGW" FORCE)
+    set(DAWN_ENABLE_D3D12 OFF CACHE BOOL "Disable Dawn D3D12 backend on MinGW" FORCE)
+endif ()
 set(AURORA_ENABLE_DVD ON CACHE BOOL "Enable DVD API support" FORCE)
 set(AURORA_ENABLE_CARD ON CACHE BOOL "Enable CARD API support" FORCE)
 set(AURORA_ENABLE_RMLUI ON CACHE BOOL "Enable RmlUi UI support" FORCE)
 add_subdirectory(extern/aurora EXCLUDE_FROM_ALL)
 target_compile_definitions(aurora_mtx PRIVATE MTX_USE_PS=1)
+if (MINGW)
+    # No Dawn source rewriting on MinGW: keep vendor sources pristine.
+endif ()
 
 add_subdirectory(libs/freeverb)
 
@@ -147,7 +168,7 @@ if (DUSK_MOVIE_SUPPORT)
         message(STATUS "dusklight: Fetching libjpeg-turbo")
         include(ExternalProject)
         set(_jpeg_install_dir ${CMAKE_BINARY_DIR}/libjpeg-turbo-install)
-        if (WIN32)
+        if (MSVC)
             set(_jpeg_lib ${_jpeg_install_dir}/lib/turbojpeg-static.lib)
         else ()
             set(_jpeg_lib ${_jpeg_install_dir}/lib/libturbojpeg.a)
@@ -500,6 +521,10 @@ if (WIN32)
 
     target_sources(dusklight PRIVATE ${DUSK_WINDOWS_ICON_ICO} ${DUSK_WINDOWS_RC})
     set_target_properties(dusklight PROPERTIES WIN32_EXECUTABLE TRUE)
+    if (MINGW)
+        set_target_properties(dusklight PROPERTIES WIN32_EXECUTABLE FALSE)
+        target_link_options(dusklight PRIVATE -mconsole)
+    endif ()
 
     if (MSVC)
         target_link_options(dusklight PRIVATE /MANIFEST:NO)
@@ -561,8 +586,10 @@ if (IOS)
     target_link_libraries(dusklight PRIVATE ${UIKIT_FRAMEWORK} ${UNIFORM_TYPE_IDENTIFIERS_FRAMEWORK})
 endif ()
 
-include(extern/aurora/cmake/AuroraCopyRuntimeDLLs.cmake)
-aurora_copy_runtime_dlls(dusklight)
+if (NOT MINGW)
+    include(extern/aurora/cmake/AuroraCopyRuntimeDLLs.cmake)
+    aurora_copy_runtime_dlls(dusklight)
+endif ()
 
 if (DUSK_SELECTED_OPT)
     if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
@@ -606,7 +633,9 @@ if (TARGET crashpad_handler)
     list(APPEND EXTRA_TARGETS crashpad_handler)
 endif ()
 install(TARGETS ${BINARY_TARGETS} ${EXTRA_TARGETS} DESTINATION ${CMAKE_INSTALL_PREFIX})
-aurora_install_runtime_dlls(dusklight ${CMAKE_INSTALL_PREFIX})
+if (NOT MINGW)
+    aurora_install_runtime_dlls(dusklight ${CMAKE_INSTALL_PREFIX})
+endif ()
 if (NOT APPLE)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/res DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif ()
@@ -614,7 +643,7 @@ if (CMAKE_BUILD_TYPE STREQUAL Debug OR CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
     set(DEBUG_FILES_LIST "")
     foreach (target IN LISTS BINARY_TARGETS EXTRA_TARGETS)
         get_target_output_name(${target} output_name)
-        if (WIN32)
+        if (MSVC)
             install(FILES $<TARGET_PDB_FILE:${target}> DESTINATION ${CMAKE_INSTALL_PREFIX} OPTIONAL)
         elseif (APPLE)
             get_target_prefix(${target} target_prefix)
@@ -634,7 +663,7 @@ if (CMAKE_BUILD_TYPE STREQUAL Debug OR CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
     # This is a terrible hack to only run this on CI
     # until I turn this into a script or something
     if(DEFINED ENV{GITHUB_ENV})
-        if (WIN32)
+        if (MSVC)
             list(TRANSFORM DEBUG_FILES_LIST APPEND ".pdb")
             list(JOIN DEBUG_FILES_LIST " " DEBUG_FILES)
             install(CODE "execute_process(WORKING_DIRECTORY \"${CMAKE_INSTALL_PREFIX}\" COMMAND 7z a -t7z \"${CMAKE_INSTALL_PREFIX}/debug.7z\" ${DEBUG_FILES})")
